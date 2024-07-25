@@ -4,6 +4,8 @@
 #include <allegro5/allegro5.h>
 #include <allegro5/allegro_font.h>
 #include <allegro5/allegro_primitives.h>
+#include <allegro5/allegro_audio.h>
+#include <allegro5/allegro_acodec.h>
 
 using namespace std;
 
@@ -17,7 +19,6 @@ void must_init(bool test, string description) {
 int main() {
     must_init(al_init(), "allegro");
     must_init(al_install_keyboard(), "keyboard");
-    must_init(al_install_mouse(), "mouse");
 
     ALLEGRO_TIMER* timer = al_create_timer(1.0 / 30.0);
     must_init(timer, "timer");
@@ -37,78 +38,40 @@ int main() {
 
     must_init(al_init_primitives_addon(), "primitives");
 
+    must_init(al_install_audio(), "audio");
+    must_init(al_init_acodec_addon(), "audio codecs");
+    must_init(al_reserve_samples(16), "reserve samples");
+
+    ALLEGRO_SAMPLE* elephant = al_load_sample("elephant.wav");
+    must_init(elephant, "elephant");
+
+    ALLEGRO_AUDIO_STREAM* music = al_load_audio_stream("music.opus", 2, 2048);
+    must_init(music, "music");
+    al_set_audio_stream_playmode(music, ALLEGRO_PLAYMODE_LOOP);
+
+    al_attach_audio_stream_to_mixer(music, al_get_default_mixer());
+
     al_register_event_source(queue, al_get_keyboard_event_source());
     al_register_event_source(queue, al_get_display_event_source(disp));
     al_register_event_source(queue, al_get_timer_event_source(timer));
-    al_register_event_source(queue, al_get_mouse_event_source());
 
     bool done = false;
     bool redraw = true;
     ALLEGRO_EVENT event;
 
-    float x, y;
-    x = 100;
-    y = 100;
-
-    float dx, dy;
-    dx = 0;
-    dy = 0;
-
-    al_grab_mouse(disp);
-
-    #define KEY_SEEN     1
-    #define KEY_RELEASED 2
-
-    unsigned char key[ALLEGRO_KEY_MAX];
-    memset(key, 0, sizeof(key));
-
-    al_hide_mouse_cursor(disp);
     al_start_timer(timer);
     while (true) {
         al_wait_for_event(queue, &event);
 
         switch (event.type) {
             case ALLEGRO_EVENT_TIMER:
-                if (key[ALLEGRO_KEY_ESCAPE]) done = true;
-
-                x += dx;
-                y += dy;
-
-                if (x < 0) {
-                    x *= -1;
-                    dx *= -1;
-                }
-                if (x > 640) {
-                    x -= (x - 640) * 2;
-                    dx *= -1;
-                }
-                if (y < 0) {
-                    y *= -1;
-                    dy *= -1;
-                }
-                if (y > 480) {
-                    y -= (y - 480) * 2;
-                    dy *= -1;
-                }
-
-                dx *= 0.9;
-                dy *= 0.9;
-
-                for (int i = 0; i < ALLEGRO_KEY_MAX; i++) key[i] &= KEY_SEEN;
-
+                // game logic goes here
                 redraw = true;
                 break;
-            case ALLEGRO_EVENT_MOUSE_AXES:
-                dx += event.mouse.dx * 0.2;
-                dy += event.mouse.dy * 0.2;
-                al_set_mouse_xy(disp, 320, 240);
-                break;
-            case ALLEGRO_EVENT_KEY_DOWN:
-                key[event.keyboard.keycode] = KEY_SEEN | KEY_RELEASED;
-                break;
-            case ALLEGRO_EVENT_KEY_UP:
-                key[event.keyboard.keycode] &= KEY_RELEASED;
-                break;
+            case ALLEGRO_EVENT_KEY_CHAR:
+                if (event.keyboard.keycode == ALLEGRO_KEY_E)
+                    al_play_sample(elephant, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, NULL);
+                if (event.keyboard.keycode != ALLEGRO_KEY_ESCAPE) break;
             case ALLEGRO_EVENT_DISPLAY_CLOSE:
                 done = true;
                 break;
@@ -118,14 +81,19 @@ int main() {
 
         if (redraw && al_is_event_queue_empty(queue)) {
             al_clear_to_color(al_map_rgb(0, 0, 0));
-            al_draw_textf(font, al_map_rgb(255, 255, 255), 0, 0, 0, "X: %.1f Y: %.1f", x, y);
-            al_draw_filled_rectangle(x, y, x + 10, y + 10, al_map_rgb(255, 0, 0));
+            al_draw_text(
+                font, al_map_rgb(255, 255, 255),
+                640/2, 480/2, ALLEGRO_ALIGN_CENTER,
+                "Knock knock, it's Nelly"
+            );
             al_flip_display();
 
             redraw = false;
         }
     }
 
+    al_destroy_audio_stream(music);
+    al_destroy_sample(elephant);
     al_destroy_font(font);
     al_destroy_display(disp);
     al_destroy_timer(timer);
